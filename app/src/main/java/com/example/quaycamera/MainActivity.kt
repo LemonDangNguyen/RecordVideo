@@ -333,19 +333,6 @@ class MainActivity : AppCompatActivity() {
         val intent = Intent(this, VideoGalleryActivity::class.java)
         startActivity(intent)
     }
-
-    private fun openAllVideos() {
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            type = "video/*"
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        }
-        if (intent.resolveActivity(packageManager) != null) {
-            startActivity(intent)
-        } else {
-            Toast.makeText(this, "No application found to open videos", Toast.LENGTH_SHORT).show()
-        }
-    }
-
     private fun allPermissionsGranted() = REQUIRED_PERMISSIONS.all {
         ContextCompat.checkSelfPermission(baseContext, it) == PackageManager.PERMISSION_GRANTED
     }
