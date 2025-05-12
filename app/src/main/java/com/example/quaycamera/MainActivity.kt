@@ -62,7 +62,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
-
+        binding.cameraView.setPlaySounds(false)
         initCamera()
         setupButtonListeners()
 
@@ -234,7 +234,6 @@ class MainActivity : AppCompatActivity() {
     private fun showFilenameDialog(tempFile: File) {
         val editText = EditText(this)
         editText.hint = "Enter video filename"
-        // Set default filename (without extension)
         val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
         editText.setText("VIDEO_$timeStamp")
 
@@ -245,14 +244,12 @@ class MainActivity : AppCompatActivity() {
                 val filename = editText.text.toString().trim()
                 if (filename.isEmpty()) {
                     Toast.makeText(this, "Filename cannot be empty", Toast.LENGTH_SHORT).show()
-                    // Use default name if empty
                     saveVideo(tempFile, "VIDEO_$timeStamp")
                 } else {
                     saveVideo(tempFile, filename)
                 }
             }
             .setNegativeButton("Cancel") { _, _ ->
-                // Delete the temporary file
                 tempFile.delete()
                 Toast.makeText(this, "Video recording canceled", Toast.LENGTH_SHORT).show()
             }
@@ -261,7 +258,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun saveVideo(tempFile: File, filename: String) {
-        // Ensure filename has .mp4 extension
         val finalFilename = if (!filename.lowercase(Locale.getDefault()).endsWith(".mp4")) {
             "$filename.mp4"
         } else {
@@ -282,23 +278,17 @@ class MainActivity : AppCompatActivity() {
             }
             File(storageDir, finalFilename)
         }
-
-        // If the destination file already exists, delete it
         if (finalFile.exists()) {
             finalFile.delete()
         }
-
-        // Rename the temporary file to the final name
         val success = tempFile.renameTo(finalFile)
 
         if (success) {
-            // Add to gallery with the new name
             addVideoToGallery(finalFile)
             val message = getString(R.string.video_saved, finalFile.absolutePath)
             Toast.makeText(this@MainActivity, message, Toast.LENGTH_LONG).show()
         } else {
             Toast.makeText(this, "Failed to save video with custom name", Toast.LENGTH_SHORT).show()
-            // Try to add the original file to gallery as fallback
             addVideoToGallery(tempFile)
         }
     }
