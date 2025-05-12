@@ -51,4 +51,14 @@ dependencies {
 
     // CameraView
     implementation("com.otaliastudios:cameraview:2.7.1")
+    implementation ("com.google.android.exoplayer:exoplayer-core:2.18.7")
+    implementation ("com.google.android.exoplayer:exoplayer-ui:2.18.7")
+    implementation ("com.github.bumptech.glide:glide:4.15.1")
+    annotationProcessor ("com.github.bumptech.glide:compiler:4.15.1")
+
+    // Kotlin Coroutines
+    implementation ("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.6.4")
+
+    // SwipeRefreshLayout
+    implementation ("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
 }
