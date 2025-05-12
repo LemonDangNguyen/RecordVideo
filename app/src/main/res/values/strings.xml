@@ -1,0 +1,15 @@
+<resources>
+    <string name="app_name">VideoRecorder</string>
+    <string name="flip_camera">Lật camera</string>
+    <string name="toggle_flash">Bật/tắt đèn flash</string>
+    <string name="record_video">Quay video</string>
+    <string name="stop_recording">Dừng quay</string>
+    <string name="recording">ĐANG QUAY</string>
+    <string name="gallery">Thư viện</string>
+    <string name="permission_required">Cần cấp quyền</string>
+    <string name="permission_message">Ứng dụng cần quyền truy cập camera và microphone để hoạt động</string>
+    <string name="grant_permission">Cấp quyền</string>
+    <string name="cancel">Hủy</string>
+    <string name="video_saved">Đã lưu video vào: %1$s</string>
+    <string name="error_recording">Lỗi khi quay video</string>
+</resources>
