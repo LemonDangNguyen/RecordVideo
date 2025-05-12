@@ -11,6 +11,7 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
 import android.view.View
+import android.widget.EditText
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -49,6 +50,7 @@ class MainActivity : AppCompatActivity() {
     private var isRecording = false
     private var flashMode = Flash.OFF
     private var recordingStartTime = 0L
+    private var tempVideoFile: File? = null
     private val handler = Handler(Looper.getMainLooper())
     private val updateTimerRunnable = object : Runnable {
         override fun run() {
@@ -104,6 +106,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
+
     private fun initCamera() {
         binding.cameraView.apply {
             mode = Mode.VIDEO
@@ -115,9 +118,8 @@ class MainActivity : AppCompatActivity() {
     private fun setupCameraCallbacks() {
         binding.cameraView.addCameraListener(object : CameraListener() {
             override fun onVideoTaken(result: VideoResult) {
-                val message = getString(R.string.video_saved, result.file.absolutePath)
-                Toast.makeText(this@MainActivity, message, Toast.LENGTH_LONG).show()
-                addVideoToGallery(result.file)
+                tempVideoFile = result.file
+                showFilenameDialog(tempVideoFile!!)
             }
 
             override fun onVideoRecordingStart() {
@@ -143,6 +145,7 @@ class MainActivity : AppCompatActivity() {
             }
         })
     }
+
     private fun setupButtonListeners() {
         binding.recordButton.setOnClickListener {
             if (isRecording) stopRecording() else startRecording()
@@ -160,13 +163,14 @@ class MainActivity : AppCompatActivity() {
             openGallery()
         }
     }
+
     private fun startRecording() {
         if (!allPermissionsGranted()) {
             requestPermissions()
             return
         }
 
-        val videoFile = createVideoFile()
+        val videoFile = createTempVideoFile()
         binding.cameraView.takeVideo(videoFile)
     }
 
@@ -190,6 +194,7 @@ class MainActivity : AppCompatActivity() {
         val timeStr = String.format("%02d:%02d", minutes, seconds)
         binding.recordingTimeText.text = timeStr
     }
+
     private fun createQuayvideoDirectory() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             return
@@ -206,9 +211,9 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun createVideoFile(): File {
+    private fun createTempVideoFile(): File {
         val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-        val fileName = "VIDEO_$timeStamp.mp4"
+        val fileName = "TEMP_$timeStamp.mp4"
 
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val quayVideoDir = File(getExternalFilesDir(Environment.DIRECTORY_MOVIES), "QUAYVIDEO")
@@ -223,6 +228,78 @@ class MainActivity : AppCompatActivity() {
                 storageDir.mkdirs()
             }
             File(storageDir, fileName)
+        }
+    }
+
+    private fun showFilenameDialog(tempFile: File) {
+        val editText = EditText(this)
+        editText.hint = "Enter video filename"
+        // Set default filename (without extension)
+        val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+        editText.setText("VIDEO_$timeStamp")
+
+        AlertDialog.Builder(this)
+            .setTitle("Save Video")
+            .setView(editText)
+            .setPositiveButton("OK") { _, _ ->
+                val filename = editText.text.toString().trim()
+                if (filename.isEmpty()) {
+                    Toast.makeText(this, "Filename cannot be empty", Toast.LENGTH_SHORT).show()
+                    // Use default name if empty
+                    saveVideo(tempFile, "VIDEO_$timeStamp")
+                } else {
+                    saveVideo(tempFile, filename)
+                }
+            }
+            .setNegativeButton("Cancel") { _, _ ->
+                // Delete the temporary file
+                tempFile.delete()
+                Toast.makeText(this, "Video recording canceled", Toast.LENGTH_SHORT).show()
+            }
+            .setCancelable(false)
+            .show()
+    }
+
+    private fun saveVideo(tempFile: File, filename: String) {
+        // Ensure filename has .mp4 extension
+        val finalFilename = if (!filename.lowercase(Locale.getDefault()).endsWith(".mp4")) {
+            "$filename.mp4"
+        } else {
+            filename
+        }
+
+        val finalFile = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val quayVideoDir = File(getExternalFilesDir(Environment.DIRECTORY_MOVIES), "QUAYVIDEO")
+            if (!quayVideoDir.exists()) {
+                quayVideoDir.mkdirs()
+            }
+            File(quayVideoDir, finalFilename)
+        } else {
+            val storageDir = File(Environment.getExternalStoragePublicDirectory(
+                Environment.DIRECTORY_MOVIES), "QUAYVIDEO")
+            if (!storageDir.exists()) {
+                storageDir.mkdirs()
+            }
+            File(storageDir, finalFilename)
+        }
+
+        // If the destination file already exists, delete it
+        if (finalFile.exists()) {
+            finalFile.delete()
+        }
+
+        // Rename the temporary file to the final name
+        val success = tempFile.renameTo(finalFile)
+
+        if (success) {
+            // Add to gallery with the new name
+            addVideoToGallery(finalFile)
+            val message = getString(R.string.video_saved, finalFile.absolutePath)
+            Toast.makeText(this@MainActivity, message, Toast.LENGTH_LONG).show()
+        } else {
+            Toast.makeText(this, "Failed to save video with custom name", Toast.LENGTH_SHORT).show()
+            // Try to add the original file to gallery as fallback
+            addVideoToGallery(tempFile)
         }
     }
 
@@ -247,6 +324,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
+
     private fun toggleFlash() {
         flashMode = when (flashMode) {
             Flash.OFF -> {
@@ -261,10 +339,10 @@ class MainActivity : AppCompatActivity() {
         binding.cameraView.flash = flashMode
     }
 
-private fun openGallery() {
-    val intent = Intent(this, VideoGalleryActivity::class.java)
-    startActivity(intent)
-}
+    private fun openGallery() {
+        val intent = Intent(this, VideoGalleryActivity::class.java)
+        startActivity(intent)
+    }
 
     private fun openAllVideos() {
         val intent = Intent(Intent.ACTION_VIEW).apply {
@@ -277,6 +355,7 @@ private fun openGallery() {
             Toast.makeText(this, "No application found to open videos", Toast.LENGTH_SHORT).show()
         }
     }
+
     private fun allPermissionsGranted() = REQUIRED_PERMISSIONS.all {
         ContextCompat.checkSelfPermission(baseContext, it) == PackageManager.PERMISSION_GRANTED
     }
