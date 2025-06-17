@@ -45,6 +45,7 @@ class MainActivity : AppCompatActivity() {
                 Manifest.permission.READ_EXTERNAL_STORAGE
             )
         }
+        //hihi
     }
     private lateinit var binding: ActivityMainBinding
     private var isRecording = false
