@@ -6,105 +6,104 @@ import android.media.MediaMetadataRetriever
 import android.os.Build
 import android.provider.MediaStore
 import android.view.LayoutInflater
-import android.view.View
 import android.view.ViewGroup
-import android.widget.ImageView
-import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.bumptech.glide.request.RequestOptions
+import com.example.quaycamera.databinding.ItemVideoBinding
 import kotlinx.coroutines.*
 import java.io.File
 
 class VideoAdapter(
     private val videos: List<VideoItem>,
-    private val onItemClick: (VideoItem) -> Unit
+    private val onItemClick: (VideoItem) -> Unit,
+    private val onItemLongClick: (VideoItem) -> Unit
 ) : RecyclerView.Adapter<VideoAdapter.VideoViewHolder>() {
 
-    // Coroutine scope for thumbnail loading
     private val coroutineScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
-
-    // Cache để lưu trữ thumbnails đã tải
     private val thumbnailCache = mutableMapOf<String, Bitmap?>()
 
-    inner class VideoViewHolder(view: View) : RecyclerView.ViewHolder(view) {
-        val thumbnail: ImageView = view.findViewById(R.id.videoThumbnail)
-        val title: TextView = view.findViewById(R.id.videoTitle)
-        val dateText: TextView = view.findViewById(R.id.videoDate)
-        val duration: TextView = view.findViewById(R.id.videoDuration)
-        val playButton: ImageView = view.findViewById(R.id.playButton)
-
-        // Job theo dõi để hủy khi không cần thiết
+    inner class VideoViewHolder(val binding: ItemVideoBinding) : RecyclerView.ViewHolder(binding.root) {
         var thumbnailJob: Job? = null
 
         init {
-            view.setOnClickListener {
+            binding.root.setOnClickListener {
                 val position = adapterPosition
                 if (position != RecyclerView.NO_POSITION) {
                     onItemClick(videos[position])
+                }
+            }
+
+            binding.root.setOnLongClickListener {
+                val position = adapterPosition
+                if (position != RecyclerView.NO_POSITION) {
+                    onItemLongClick(videos[position])
+                    true
+                } else {
+                    false
+                }
+            }
+        }
+
+        fun bind(video: VideoItem) {
+            binding.videoTitle.text = video.name
+            binding.videoDate.text = video.date
+            binding.videoThumbnail.setImageResource(R.drawable.ic_video_thumbnail)
+            binding.playButton.visibility = android.view.View.VISIBLE
+
+            thumbnailJob?.cancel()
+
+            thumbnailJob = coroutineScope.launch {
+                val uri = video.uri.toString()
+                var bitmap = thumbnailCache[uri]
+
+                if (bitmap == null) {
+                    bitmap = withContext(Dispatchers.IO) {
+                        loadVideoThumbnail(video)
+                    }
+                    thumbnailCache[uri] = bitmap
+                }
+
+                if (bitmap != null && isActive) {
+                    Glide.with(binding.root.context)
+                        .load(bitmap)
+                        .apply(RequestOptions()
+                            .centerCrop()
+                            .placeholder(R.drawable.ic_video_thumbnail)
+                        )
+                        .into(binding.videoThumbnail)
+                }
+
+                val duration = withContext(Dispatchers.IO) {
+                    getVideoDuration(video)
+                }
+                if (isActive) {
+                    binding.videoDuration.text = duration
                 }
             }
         }
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VideoViewHolder {
-        val view = LayoutInflater.from(parent.context)
-            .inflate(R.layout.item_video, parent, false)
-        return VideoViewHolder(view)
+        val binding = ItemVideoBinding.inflate(
+            LayoutInflater.from(parent.context),
+            parent,
+            false
+        )
+        return VideoViewHolder(binding)
     }
 
     override fun onBindViewHolder(holder: VideoViewHolder, position: Int) {
-        val video = videos[position]
+        holder.bind(videos[position])
+    }
 
-        // Thiết lập thông tin cơ bản
-        holder.title.text = video.name
-        holder.dateText.text = video.date
+    override fun getItemCount() = videos.size
 
-        // Hiển thị placeholder và thêm hiệu ứng loading
-        holder.thumbnail.setImageResource(R.drawable.ic_video_thumbnail)
-        holder.playButton.visibility = View.VISIBLE
-
-        // Hủy bỏ job tải thumbnail trước đó nếu có
+    override fun onViewRecycled(holder: VideoViewHolder) {
+        super.onViewRecycled(holder)
         holder.thumbnailJob?.cancel()
-
-        // Tạo job mới để tải thumbnail
-        holder.thumbnailJob = coroutineScope.launch {
-            // Kiểm tra xem thumbnail đã được cache chưa
-            val uri = video.uri.toString()
-            var bitmap = thumbnailCache[uri]
-
-            if (bitmap == null) {
-                // Tải thumbnail trong background
-                bitmap = withContext(Dispatchers.IO) {
-                    loadVideoThumbnail(video)
-                }
-
-                // Lưu vào cache
-                thumbnailCache[uri] = bitmap
-            }
-
-            // Hiển thị thumbnail
-            if (bitmap != null && isActive) {
-                // Sử dụng Glide để hiển thị thumbnail
-                Glide.with(holder.itemView.context)
-                    .load(bitmap)
-                    .apply(RequestOptions()
-                        .centerCrop()
-                        .placeholder(R.drawable.ic_video_thumbnail)
-                    )
-                    .into(holder.thumbnail)
-            }
-
-            // Tải và hiển thị thời lượng video
-            val duration = withContext(Dispatchers.IO) {
-                getVideoDuration(video)
-            }
-
-            // Hiển thị thời lượng
-            if (isActive) {
-                holder.duration.text = duration
-            }
-        }
+        holder.thumbnailJob = null
+        holder.binding.videoThumbnail.setImageDrawable(null)
     }
 
     private fun loadVideoThumbnail(videoItem: VideoItem): Bitmap? {
@@ -125,8 +124,6 @@ class VideoAdapter(
                     retriever.setDataSource(videoItem.uri.toString())
                 }
             }
-
-            // Lấy thumbnail từ giây đầu tiên
             retriever.getFrameAtTime(1000000, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
         } catch (e: Exception) {
             e.printStackTrace()
@@ -153,11 +150,9 @@ class VideoAdapter(
                 }
             }
 
-            // Lấy thời lượng
             val durationStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
             val durationMs = durationStr?.toLongOrNull() ?: 0L
 
-            // Chuyển đổi sang định dạng phút:giây
             val seconds = (durationMs / 1000) % 60
             val minutes = (durationMs / (1000 * 60)) % 60
             val hours = durationMs / (1000 * 60 * 60)
@@ -174,22 +169,8 @@ class VideoAdapter(
         }
     }
 
-    override fun getItemCount() = videos.size
-
-    override fun onViewRecycled(holder: VideoViewHolder) {
-        super.onViewRecycled(holder)
-        // Hủy job tải thumbnail khi view bị recycle
-        holder.thumbnailJob?.cancel()
-        holder.thumbnailJob = null
-
-        // Xóa hình ảnh để giải phóng bộ nhớ
-        holder.thumbnail.setImageDrawable(null)
-    }
-
     fun cleanup() {
-        // Hủy bỏ tất cả coroutines đang chạy
         coroutineScope.cancel()
-        // Xóa cache
         thumbnailCache.clear()
     }
 }
